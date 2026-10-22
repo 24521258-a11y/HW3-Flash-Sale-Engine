@@ -1,5 +1,6 @@
 
 import { useState } from 'react'
+import AntiDriftTimer from './components/AntiDriftTimer'
 import './App.css'
 
 type Product = {
@@ -87,9 +88,8 @@ function formatPrice(price: number) {
 function App() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
-  const [notice, setNotice] = useState(
-    'Flash Sale demo is ready.'
-  )
+  const [notice, setNotice] = useState('Flash Sale demo is ready.')
+  const [saleExpired, setSaleExpired] = useState(false)
 
   const categories = [
     'All',
@@ -108,6 +108,11 @@ function App() {
   })
 
   function handleReserve(product: Product) {
+    if (saleExpired) {
+      setNotice('Flash Sale has ended. Reservations are closed.')
+      return
+    }
+
     setNotice(
       `Selected ${product.name}. Inventory reservation will be implemented in Step 4.`
     )
@@ -118,7 +123,9 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-icon">⚡</span>
-          <span>FLASH<span className="brand-highlight">ZONE</span></span>
+          <span>
+            FLASH<span className="brand-highlight">ZONE</span>
+          </span>
         </div>
 
         <span className="topbar-tag">
@@ -164,28 +171,22 @@ function App() {
           <span className="section-eyebrow">
             LIMITED TIME EVENT
           </span>
+
           <h2>Flash Sale Countdown</h2>
+
           <p>
-            Precise countdown engine coming in Step 3.
+            Zero-drift timer powered by Date.now()
+            and requestAnimationFrame.
           </p>
         </div>
 
-        <div className="countdown">
-          <div className="time-box">
-            <strong>00</strong>
-            <span>HOURS</span>
-          </div>
-          <span className="separator">:</span>
-          <div className="time-box">
-            <strong>00</strong>
-            <span>MINUTES</span>
-          </div>
-          <span className="separator">:</span>
-          <div className="time-box">
-            <strong>00</strong>
-            <span>SECONDS</span>
-          </div>
-        </div>
+        <AntiDriftTimer
+          durationMs={15 * 60 * 1000}
+          onExpire={() => {
+            setSaleExpired(true)
+            setNotice('Flash Sale has ended!')
+          }}
+        />
       </section>
 
       <section id="products" className="products-section">
@@ -195,9 +196,7 @@ function App() {
               EXCLUSIVE OFFERS
             </span>
             <h2>Today's Flash Deals</h2>
-            <p>
-              Limited stock — first come, first served.
-            </p>
+            <p>Limited stock — first come, first served.</p>
           </div>
 
           <span className="product-count">
@@ -299,12 +298,14 @@ function App() {
                   <button
                     type="button"
                     className="buy-button"
-                    disabled={product.stock === 0}
+                    disabled={product.stock === 0 || saleExpired}
                     onClick={() => handleReserve(product)}
                   >
-                    {product.stock === 0
-                      ? 'Sold Out'
-                      : 'Reserve Now →'}
+                    {saleExpired
+                      ? 'Sale Ended'
+                      : product.stock === 0
+                        ? 'Sold Out'
+                        : 'Reserve Now →'}
                   </button>
                 </div>
               </article>
