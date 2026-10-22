@@ -1,81 +1,14 @@
-
-import { useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import AntiDriftTimer from './components/AntiDriftTimer'
+import {
+  createInitialState,
+  inventoryReducer,
+} from './inventoryMachine'
+import type { Product, ReservationStatus } from './inventoryMachine'
 import './App.css'
+import './Inventory.css'
 
-type Product = {
-  id: number
-  name: string
-  category: string
-  price: number
-  originalPrice: number
-  stock: number
-  totalStock: number
-  emoji: string
-}
-
-const products: Product[] = [
-  {
-    id: 1,
-    name: 'Wireless Headphones Pro',
-    category: 'Electronics',
-    price: 590000,
-    originalPrice: 1290000,
-    stock: 12,
-    totalStock: 50,
-    emoji: '🎧',
-  },
-  {
-    id: 2,
-    name: 'Smart Watch Series X',
-    category: 'Wearables',
-    price: 890000,
-    originalPrice: 2190000,
-    stock: 8,
-    totalStock: 40,
-    emoji: '⌚',
-  },
-  {
-    id: 3,
-    name: 'Bluetooth Speaker Mini',
-    category: 'Audio',
-    price: 350000,
-    originalPrice: 790000,
-    stock: 25,
-    totalStock: 60,
-    emoji: '🔊',
-  },
-  {
-    id: 4,
-    name: 'Mechanical Keyboard RGB',
-    category: 'Accessories',
-    price: 690000,
-    originalPrice: 1490000,
-    stock: 5,
-    totalStock: 30,
-    emoji: '⌨️',
-  },
-  {
-    id: 5,
-    name: 'Gaming Mouse Ultra',
-    category: 'Gaming',
-    price: 290000,
-    originalPrice: 690000,
-    stock: 17,
-    totalStock: 50,
-    emoji: '🖱️',
-  },
-  {
-    id: 6,
-    name: 'Portable Power Bank',
-    category: 'Mobile Accessories',
-    price: 390000,
-    originalPrice: 890000,
-    stock: 0,
-    totalStock: 35,
-    emoji: '🔋',
-  },
-]
+const SALE_DURATION_MS = 15 * 60 * 1000
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat('vi-VN', {
@@ -85,21 +18,81 @@ function formatPrice(price: number) {
   }).format(price)
 }
 
+function formatSeconds(ms: number) {
+  return `${Math.max(0, Math.ceil(ms / 1000))}s`
+}
+
 function App() {
+  const [state, dispatch] = useReducer(
+    inventoryReducer,
+    undefined,
+    createInitialState
+  )
+
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('All')
-  const [notice, setNotice] = useState('Flash Sale demo is ready.')
-  const [saleExpired, setSaleExpired] = useState(false)
+  const [saleRound, setSaleRound] = useState(1)
+  const [now, setNow] = useState(() => Date.now())
+
+  const reservationCounter = useRef(0)
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      const currentTime = Date.now()
+      setNow(currentTime)
+      dispatch({ type: 'TICK', now: currentTime })
+    }, 250)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  const handleExpire = useCallback(() => {
+    dispatch({ type: 'END_SALE', now: Date.now() })
+  }, [])
+
+  function restartSale() {
+    dispatch({ type: 'RESET' })
+    setNow(Date.now())
+    setSaleRound(previous => previous + 1)
+  }
+
+  function reserveProduct(product: Product) {
+    const currentTime = Date.now()
+    reservationCounter.current += 1
+
+    dispatch({
+      type: 'RESERVE',
+      productId: product.id,
+      reservationId: `${currentTime}-${reservationCounter.current}`,
+      now: currentTime,
+    })
+  }
+
+  function checkout(reservationId: string) {
+    dispatch({
+      type: 'CHECKOUT',
+      reservationId,
+      now: Date.now(),
+    })
+  }
+
+  function cancelReservation(reservationId: string) {
+    dispatch({
+      type: 'CANCEL',
+      reservationId,
+      now: Date.now(),
+    })
+  }
 
   const categories = [
     'All',
-    ...new Set(products.map(product => product.category)),
+    ...new Set(state.products.map(product => product.category)),
   ]
 
-  const filteredProducts = products.filter(product => {
+  const filteredProducts = state.products.filter(product => {
     const matchesSearch = product.name
       .toLowerCase()
-      .includes(search.toLowerCase())
+      .includes(search.trim().toLowerCase())
 
     const matchesCategory =
       category === 'All' || product.category === category
@@ -107,15 +100,19 @@ function App() {
     return matchesSearch && matchesCategory
   })
 
-  function handleReserve(product: Product) {
-    if (saleExpired) {
-      setNotice('Flash Sale has ended. Reservations are closed.')
-      return
-    }
+  const activeReservations = state.reservations.filter(
+    reservation => reservation.status === 'reserved'
+  )
 
-    setNotice(
-      `Selected ${product.name}. Inventory reservation will be implemented in Step 4.`
-    )
+  const checkedOutCount = state.reservations.filter(
+    reservation => reservation.status === 'checked_out'
+  ).length
+
+  const statusLabels: Record<ReservationStatus, string> = {
+    reserved: 'RESERVED',
+    checked_out: 'CHECKED OUT',
+    cancelled: 'CANCELLED',
+    expired: 'EXPIRED',
   }
 
   return (
@@ -153,6 +150,7 @@ function App() {
             <a href="#products" className="primary-link">
               Explore Deals →
             </a>
+
             <span className="hero-badge">
               Up to 70% OFF
             </span>
@@ -173,7 +171,6 @@ function App() {
           </span>
 
           <h2>Flash Sale Countdown</h2>
-
           <p>
             Zero-drift timer powered by Date.now()
             and requestAnimationFrame.
@@ -181,12 +178,33 @@ function App() {
         </div>
 
         <AntiDriftTimer
-          durationMs={15 * 60 * 1000}
-          onExpire={() => {
-            setSaleExpired(true)
-            setNotice('Flash Sale has ended!')
-          }}
+          key={saleRound}
+          durationMs={SALE_DURATION_MS}
+          onExpire={handleExpire}
+          onRestart={restartSale}
         />
+      </section>
+
+      <section className="inventory-stats" aria-label="Inventory statistics">
+        <article className="inventory-stat">
+          <span>Available Units</span>
+          <strong>
+            {state.products.reduce(
+              (total, product) => total + product.stock,
+              0
+            )}
+          </strong>
+        </article>
+
+        <article className="inventory-stat">
+          <span>Active Reservations</span>
+          <strong>{activeReservations.length}</strong>
+        </article>
+
+        <article className="inventory-stat">
+          <span>Demo Checkouts</span>
+          <strong>{checkedOutCount}</strong>
+        </article>
       </section>
 
       <section id="products" className="products-section">
@@ -279,7 +297,7 @@ function App() {
                     <div
                       className="progress-track"
                       role="progressbar"
-                      aria-label={`Stock sold for ${product.name}`}
+                      aria-label={`Unavailable stock for ${product.name}`}
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={Math.round(soldPercent)}
@@ -291,17 +309,17 @@ function App() {
                     </div>
 
                     <span className="sold-label">
-                      {Math.round(soldPercent)}% sold
+                      {Math.round(soldPercent)}% unavailable
                     </span>
                   </div>
 
                   <button
                     type="button"
                     className="buy-button"
-                    disabled={product.stock === 0 || saleExpired}
-                    onClick={() => handleReserve(product)}
+                    disabled={product.stock <= 0 || !state.saleActive}
+                    onClick={() => reserveProduct(product)}
                   >
-                    {saleExpired
+                    {!state.saleActive
                       ? 'Sale Ended'
                       : product.stock === 0
                         ? 'Sold Out'
@@ -320,15 +338,110 @@ function App() {
         )}
       </section>
 
+      <section className="reservations-panel" aria-labelledby="orders-title">
+        <div className="reservations-heading">
+          <div>
+            <span className="section-eyebrow">
+              INVENTORY STATE MACHINE
+            </span>
+            <h2 id="orders-title">Reservation Management</h2>
+            <p>
+              Reserve for 30 seconds. Checkout or cancel
+              before the reservation expires.
+            </p>
+          </div>
+
+          <span className="reservation-count">
+            {activeReservations.length} Active
+          </span>
+        </div>
+
+        {state.reservations.length === 0 ? (
+          <p className="reservation-empty">
+            No reservations yet. Choose a product and press Reserve Now.
+          </p>
+        ) : (
+          <div className="reservation-table-wrap">
+            <table className="reservation-table">
+              <thead>
+                <tr>
+                  <th scope="col">Product</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Time Left</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {state.reservations.map(reservation => {
+                  const active = reservation.status === 'reserved'
+                  const remaining = Math.max(
+                    0,
+                    reservation.expiresAt - now
+                  )
+
+                  return (
+                    <tr key={reservation.id}>
+                      <td>{reservation.productName}</td>
+                      <td>
+                        <span
+                          className={`reservation-status status-${reservation.status}`}
+                        >
+                          {statusLabels[reservation.status]}
+                        </span>
+                      </td>
+
+                      <td>
+                        {active
+                          ? formatSeconds(remaining)
+                          : '—'}
+                      </td>
+
+                      <td>
+                        {active ? (
+                          <div className="reservation-actions">
+                            <button
+                              type="button"
+                              className="checkout-button"
+                              onClick={() => checkout(reservation.id)}
+                            >
+                              Checkout
+                            </button>
+
+                            <button
+                              type="button"
+                              className="cancel-button"
+                              onClick={() => cancelReservation(reservation.id)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="finished-label">
+                            Completed action
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <section className="engine-panel">
         <div>
           <span className="section-eyebrow">
             SYSTEM ARCHITECTURE
           </span>
-          <h2>High-Concurrency Engine</h2>
+
+          <h2>Inventory State Machine</h2>
+
           <p>
-            Powered by a precision countdown and an
-            inventory reservation state machine.
+            Available → Reserved → Checked Out.
+            Cancelled or expired reservations restore available stock.
           </p>
         </div>
 
@@ -340,7 +453,7 @@ function App() {
       </section>
 
       <p className="notification" role="status">
-        {notice}
+        {state.message}
       </p>
 
       <footer className="footer">

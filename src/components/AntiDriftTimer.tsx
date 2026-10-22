@@ -1,60 +1,37 @@
 
 import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
 
-type AntiDriftTimerProps = {
+type TimerProps = {
   durationMs: number
-  onExpire?: () => void
+  onExpire: () => void
+  onRestart: () => void
 }
 
-type TimeParts = {
-  hours: number
-  minutes: number
-  seconds: number
-  milliseconds: number
-}
-
-function splitTime(milliseconds: number): TimeParts {
-  const total = Math.max(0, Math.ceil(milliseconds))
-
-  return {
-    hours: Math.floor(total / 3600000),
-    minutes: Math.floor((total % 3600000) / 60000),
-    seconds: Math.floor((total % 60000) / 1000),
-    milliseconds: total % 1000,
-  }
-}
-
-function formatNumber(value: number) {
+function formatTime(value: number) {
   return String(value).padStart(2, '0')
 }
 
 export default function AntiDriftTimer({
   durationMs,
   onExpire,
-}: AntiDriftTimerProps) {
-  const [generation, setGeneration] = useState(0)
+  onRestart,
+}: TimerProps) {
+  const [deadline] = useState(() => Date.now() + durationMs)
   const [remaining, setRemaining] = useState(durationMs)
 
   useEffect(() => {
-    const targetTime = Date.now() + durationMs
     let frameId = 0
-    let expired = false
+    let stopped = false
 
     function tick() {
-      const timeLeft = Math.max(0, targetTime - Date.now())
+      if (stopped) return
 
-      setRemaining(previous =>
-        Math.ceil(previous / 50) === Math.ceil(timeLeft / 50)
-          ? previous
-          : timeLeft
-      )
+      const left = Math.max(0, deadline - Date.now())
+      setRemaining(left)
 
-      if (timeLeft <= 0) {
-        if (!expired) {
-          expired = true
-          onExpire?.()
-        }
+      if (left === 0) {
+        stopped = true
+        onExpire()
         return
       }
 
@@ -64,41 +41,45 @@ export default function AntiDriftTimer({
     tick()
 
     return () => {
-      expired = true
+      stopped = true
       cancelAnimationFrame(frameId)
     }
-  }, [durationMs, generation, onExpire])
+  }, [deadline, onExpire])
 
-  const time = splitTime(remaining)
+  const totalSeconds = Math.ceil(remaining / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
   const progress =
     durationMs > 0
-      ? Math.max(0, Math.min(100, (remaining / durationMs) * 100))
+      ? Math.max(0, Math.min(100, remaining / durationMs * 100))
       : 0
 
   return (
-    <div className="timer-widget">
+    <section className="timer-widget" aria-label="Countdown timer">
       <div
         className="countdown"
         role="timer"
-        aria-label="Flash sale time remaining"
+        aria-label="Flash Sale countdown"
         aria-live="off"
       >
         <div className="time-box">
-          <strong>{formatNumber(time.hours)}</strong>
+          <strong>{formatTime(hours)}</strong>
           <span>HOURS</span>
         </div>
 
         <span className="separator" aria-hidden="true">:</span>
 
         <div className="time-box">
-          <strong>{formatNumber(time.minutes)}</strong>
+          <strong>{formatTime(minutes)}</strong>
           <span>MINUTES</span>
         </div>
 
         <span className="separator" aria-hidden="true">:</span>
 
         <div className="time-box">
-          <strong>{formatNumber(time.seconds)}</strong>
+          <strong>{formatTime(seconds)}</strong>
           <span>SECONDS</span>
         </div>
       </div>
@@ -106,28 +87,25 @@ export default function AntiDriftTimer({
       <div
         className="timer-progress"
         role="progressbar"
-        aria-label="Time remaining percentage"
+        aria-label="Sale time remaining"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(progress)}
       >
         <div
           className="timer-progress-fill"
-          style={{ width: `${progress}%` } as CSSProperties}
+          style={{ width: `${progress}%` }}
         />
       </div>
 
       <p className="timer-precision">
-        Precision: {String(time.milliseconds).padStart(3, '0')} ms
+        Precision: {String(Math.ceil(remaining) % 1000).padStart(3, '0')} ms
       </p>
 
       <button
-        type="button"
         className="timer-restart"
-        onClick={() => {
-          setRemaining(durationMs)
-          setGeneration(previous => previous + 1)
-        }}
+        type="button"
+        onClick={onRestart}
       >
         ↻ Restart Demo
       </button>
@@ -137,6 +115,6 @@ export default function AntiDriftTimer({
           Flash Sale has ended!
         </p>
       )}
-    </div>
+    </section>
   )
 }
