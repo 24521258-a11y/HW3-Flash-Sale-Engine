@@ -1,0 +1,88 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+  <title>HW3 - Inventory Unit Tests</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 30px 15px;
+      background: #0b1224;
+      color: #f8fafc;
+      font-family: Arial, sans-serif;
+    }
+
+    main {
+      max-width: 1150px;
+      margin: auto;
+    }
+
+    h1 { color: #7dd3fc; }
+
+    button {
+      padding: 14px 24px;
+      border: 0;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:focus-visible {
+      outline: 3px solid #fbbf24;
+      outline-offset: 3px;
+    }
+
+    #unit-test-results {
+      margin-top: 25px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #17243e;
+    }
+
+    th, td {
+      padding: 13px;
+      text-align: left;
+      border: 1px solid #475569;
+      font-size: 13px;
+    }
+
+    th { background: #1e40af; }
+
+    a { color: #7dd3fc; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Inventory State Machine - Unit Tests</h1>
+    <p>
+      Nine automated checks for reservation,
+      checkout, cancellation and inventory consistency.
+    </p>
+
+    <button id="run-unit-tests" type="button">
+      Run All Unit Tests
+    </button>
+
+    <section id="unit-test-results"
+             aria-live="polite">
+      <p>Click the button to run the tests.</p>
+    </section>
+
+    <p><a href="/">Return to Flash Sale</a></p>
+  </main>
+
+  <script type="module" src="/src/unitTestsPage.ts"></script>
+</body>
+</html>
